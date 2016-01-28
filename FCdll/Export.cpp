@@ -28,7 +28,8 @@ extern "C" TData __declspec(dllexport) __stdcall maintain(char* s)
 	}
 	catch (ErrStruct* p)
 	{
-		delete p->pointer;
+		for (int i = 0; i < p->vec.size(); ++i)
+			delete p->vec[i];
 		ret.result = p->_code;
 		delete p;
 	}

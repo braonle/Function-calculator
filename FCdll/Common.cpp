@@ -1,14 +1,16 @@
 #include "Common.h"
 #include <algorithm>
 
-///Machinery epsilon
-const long double e = 0.0000000001;
+using namespace SpecMath;
+
 StNode* Stack::pointer = NULL;
 AVLTree < Quantum > Drobot::global_tree;
 Quantum* Drobot::ope_br = new OpenedBracket;
 vector < string > Drobot::input_history;
 
-bool isEqu(long double &arg1, long double &arg2)
+///Machinery epsilon
+const long double e = 0.0000000001;
+bool isEqu(const long double &arg1, const long double &arg2)
 {
 	if (ABS(arg1 - arg2) < e)
 		return true;
@@ -46,11 +48,7 @@ Quantum* newSame(Quantum* obj)
 }
 
 
-ArgData::ArgData(TKeyData *input, TInternalData _data)
-{
-	key = input;
-	data = _data;
-}
+ArgData::ArgData(TKeyData *input, TInternalData _data) : key(input), data(_data) { }
 //Не забудь сделать delete
 TKeyData* ArgData::GetName()
 {
@@ -76,6 +74,7 @@ TKeyData* Quantum::GetName()
 {
 	return NULL;
 }
+Quantum::~Quantum() {}
 short Quantum::getNumOfArguments()
 {
 	return 0;
@@ -88,11 +87,22 @@ bool Quantum::isUnchengable()
 
 Const::Const(string* input)
 {
+	if (*input == "i")
+	{
+		name = new string;
+		name->push_back('i');
+		name->push_back(1);
+		name->push_back(1);
+		value = new TInternalData(0, 1);
+		return;
+	}
+
 	ErrStruct* p = new ErrStruct;
 	string* name_ = new string;
-	p->pointer = name_;
+	p->add(name_);
 	int iter = 0;
-	goToNextSymbol(input, &iter);
+	Interpreter interpreter(input, &iter, p);
+	interpreter.goToNextSymbol();
 
 	if (iter >= input->size())
 		throw(p->code(invalid_alloc));
@@ -100,20 +110,20 @@ Const::Const(string* input)
 	if (isEmptySimbol((*input)[iter]) || (*input)[iter] <= '9' && (*input)[iter] >= '0' || (*input)[iter] == '.')
 		throw(p->code(invalid_alloc));
 
-	getName(name_, input, &iter);
+	interpreter.getName(name_);
 	name = name_;
-	goToNextSymbol(input, &iter);
+	interpreter.goToNextSymbol();
 	if (iter >= input->size())
 		throw(p->code(invalid_alloc));
 
 	if ((*input)[iter] == '(')
 	{
 		iter++;
-		goToNextSymbol(input, &iter);
+		interpreter.goToNextSymbol();
 		if ((*input)[iter] != ')')
 			throw(p->code(invalid_alloc));
 		iter++;
-		goToNextSymbol(input, &iter);
+		interpreter.goToNextSymbol();
 	}
 
 	if ((*input)[iter] != '=')
@@ -124,7 +134,7 @@ Const::Const(string* input)
 	iter++;
 	
 	EvalList pol_list;
-	makePolandList(&pol_list, input, &iter, NULL, p);
+	interpreter.makePolandList(&pol_list);
 	pol_list.evaluate();
 
 	if (!Stack::isNormalRezult())
@@ -135,7 +145,7 @@ Const::Const(string* input)
 }
 void Const::evaluate(AVLTree < ArgData > *tree)
 {
-	Stack::push(*value);
+	Stack::push(value->clone());
 }
 TypeOfQuantum Const::GetType()
 {
@@ -148,8 +158,10 @@ TKeyData* Const::GetName()
 }
 Const::~Const()
 {
-	if (name) delete name;
-	if (value) delete value;
+	if (name)
+		delete name;
+	if (value)
+		delete value;
 }
 void Const::change(Const* tmp)
 {
@@ -188,7 +200,7 @@ TypeOfQuantum Value::GetType()
 }
 void Value::evaluate(AVLTree < ArgData > *tree)
 {
-	Stack::push(*_data);
+	Stack::push(_data->clone());
 }
 Value::~Value()
 {
@@ -199,7 +211,7 @@ Value::~Value()
 
 void Variable::evaluate(AVLTree < ArgData > *tree)
 {
-	Stack::push(tree->find(_name)->data);
+	Stack::push(tree->find(_name)->data.clone());
 }
 Variable::Variable(TKeyData *name)
 {
@@ -211,7 +223,8 @@ Variable::Variable(Variable *v)
 }
 Variable::~Variable()
 {
-	if (_name) delete _name;
+	if (_name)
+		delete _name;
 }
 TypeOfQuantum Variable::GetType()
 {
@@ -227,15 +240,15 @@ TKeyData* Variable::GetName()
 Function::Function(string *input)
 {
 	ErrStruct* p = new ErrStruct;
-	p->pointer;
 	string* name_ = new string;
-	p->pointer = name_;
+	p->add(name_);
 	int iter = 0;
-	goToNextSymbol(input, &iter);
+	Interpreter interpreter(input, &iter, p);
+	interpreter.goToNextSymbol();
 	if (iter >= input->size())
 		throw(p->code(invalid_alloc));
-	getName(name_, input, &iter);
-	goToNextSymbol(input, &iter);
+	interpreter.getName(name_);
+	interpreter.goToNextSymbol();
 	_name = name_;
 	if (iter >= input->size())
 		throw(p->code(invalid_alloc));
@@ -247,7 +260,7 @@ Function::Function(string *input)
 
 	for (;;)
 	{
-		goToNextSymbol(input, &iter);
+		interpreter.goToNextSymbol();
 		if ((*input)[iter] == ')' && !_ArgNames.empty())
 		{
 			_ArgNum++;
@@ -266,24 +279,25 @@ Function::Function(string *input)
 		if (c <= '9' && c >= '0' || c == '.' || c == '(')
 			throw(p->code(invalid_alloc));
 		string n_of_arg;
-		getName(&n_of_arg, input, &iter);
+		interpreter.getName(&n_of_arg);
 		if (find(&_ArgNames, &n_of_arg))
 			throw(p->code(invalid_alloc));
 		_ArgNames.push_back(n_of_arg);
 
-		goToNextSymbol(input, &iter);
+		interpreter.goToNextSymbol();
 		if ((*input)[iter] != ',' && (*input)[iter] != ')')
 			throw(p->code(invalid_alloc));
 	}
 
-	goToNextSymbol(input, &iter);
+	interpreter.goToNextSymbol();
 	_name->push_back((char) (_ArgNum / 255 + 1));
 	_name->push_back((char) (_ArgNum % 255 + 1));
 	if ((*input)[iter] != '=')
 		throw(p->code(invalid_alloc));
 	reverse(_ArgNames.begin(), _ArgNames.end());
 	iter++;
-	makePolandList(&_list, input, &iter, &_ArgNames, p);
+	interpreter.setVector(&_ArgNames);
+	interpreter.makePolandList(&_list);
 	delete p;
 }
 short Function::getNumOfArguments()
@@ -328,7 +342,8 @@ void Function::change(Function *tmp)
 }
 Function::~Function()
 {
-	if (_name) delete _name;
+	if (_name)
+		delete _name;
 	_ArgNames.clear();
 }
 void Function::becomeConst()
@@ -351,7 +366,7 @@ Plus::Plus()
 }
 void Plus::evaluate(AVLTree < ArgData > *tree)
 {
-	Stack::push(Stack::pop() + Stack::pop());
+	Stack::push(Stack::pop() += Stack::pop().mustDeleteContent());
 }
 char Plus::getPriority()
 {
@@ -370,7 +385,7 @@ Substract::Substract()
 void Substract::evaluate(AVLTree < ArgData > *tree)
 {
 	TInternalData tmp = Stack::pop();
-	Stack::push(Stack::pop() - tmp);
+	Stack::push(Stack::pop() -= tmp);
 }
 char Substract::getPriority()
 {
@@ -389,7 +404,7 @@ Multiplication::Multiplication()
 }
 void Multiplication::evaluate(AVLTree < ArgData > *tree)
 {
-	Stack::push(Stack::pop() * Stack::pop());
+	Stack::push(Stack::pop() *= Stack::pop());
 }
 char Multiplication::getPriority()
 {
@@ -409,12 +424,7 @@ Division::Division()
 void Division::evaluate(AVLTree < ArgData > *tree)
 {
 	TInternalData tmp = Stack::pop();
-	long double n = 0.0;
-
-	if (isEqu(tmp, n))
-		throw(division_by_zero);
-	else
-		Stack::push(Stack::pop() / tmp);
+	Stack::push(Stack::pop() /= tmp);
 }
 char Division::getPriority()
 {
@@ -427,7 +437,7 @@ TKeyData* Division::GetName()
 }
 
 
-Power::Power()
+/*Power::Power()
 {
 	key = new string("^");
 }
@@ -454,10 +464,18 @@ TKeyData* Power::GetName()
 {
 	string* st = new string(*key);
 	return st;
+}*/
+
+
+StNode::StNode(TInternalData& _data, StNode* p) : prev(p), data(_data)
+{
+	data.mustDeleteContent();
 }
-
-
-StNode::StNode(TInternalData _data, StNode* p) : prev(p), data(_data){}
+void StNode::notToDeletePTR()
+{
+	data.notToDeleteContent();
+}
+StNode::~StNode() {}
 
 
 void Stack::clear()
@@ -471,7 +489,7 @@ void Stack::clear()
 		pointer = tmp;
 	}
 }
-void Stack::push(TInternalData data)
+void Stack::push(TInternalData& data)
 {
 	if (pointer)
 		pointer = new StNode(data, pointer);
@@ -484,9 +502,10 @@ TInternalData Stack::pop()
 		throw(invalid_expression);
 	TInternalData temp = pointer->data;
 	StNode* tmp = pointer->prev;
+	pointer->notToDeletePTR();
 	delete pointer;
 	pointer = tmp;
-	return temp;
+	return temp.notToDeleteContent();
 }
 bool Stack::isEmpty()
 {
@@ -516,7 +535,8 @@ Stack::~Stack()
 StdFunction::StdFunction(short ArgNum) : _ArgNum(ArgNum){};
 StdFunction::~StdFunction()
 {
-	if (key) delete key;
+	if (key)
+		delete key;
 }
 TypeOfQuantum StdFunction::GetType()
 {
@@ -547,7 +567,8 @@ TypeOfQuantum BinaryOp::GetType()
 }
 BinaryOp::~BinaryOp()
 {
-	if (key) delete key;
+	if (key)
+		delete key;
 }
 
 
@@ -666,7 +687,7 @@ void EvalList::nu()
 }
 
 
-Sine::Sine() : StdFunction(1)
+/*Sine::Sine() : StdFunction(1)
 {
 	key = new string("sin");
 	key->push_back(1);
@@ -756,7 +777,8 @@ void Cotangent::evaluate(AVLTree<ArgData> *tree)
 		Stack::clear();
 		throw invalid_value;
 	}
-	else Stack::push(cos(tmp)/sin(tmp));
+	else
+		Stack::push(cos(tmp)/sin(tmp));
 }
 
 
@@ -787,7 +809,8 @@ void Arcsine::evaluate(AVLTree<ArgData> *tree)
 		Stack::clear();
 		throw invalid_value;
 	}
-	else Stack::push(asin(tmp));
+	else
+		Stack::push(asin(tmp));
 }
 
 
@@ -806,7 +829,8 @@ void Arccosine::evaluate(AVLTree<ArgData> *tree)
 		Stack::clear();
 		throw invalid_operand;
 	}
-	else Stack::push(acos(tmp));
+	else
+		Stack::push(acos(tmp));
 }
 
 
@@ -860,7 +884,7 @@ void Arccotangent::evaluate(AVLTree<ArgData> *tree)
 	if (isEqu(tmp, n))
 		Stack::push(M_PI_2);
 	else
-		Stack::push(1 / atan(tmp));
+		Stack::push(atan(1 / tmp));
 }
 
 
@@ -893,7 +917,8 @@ void Logarithm::evaluate(AVLTree<ArgData> *tree)
 		Stack::clear();
 		throw invalid_value;
 	}
-	else Stack::push(log(arg)/log(base));
+	else
+		Stack::push(log(arg)/log(base));
 }
 
 
@@ -912,7 +937,8 @@ void Ln::evaluate(AVLTree<ArgData> *tree)
 		Stack::clear();
 		throw invalid_value;
 	}
-	else Stack::push(log(arg));
+	else
+		Stack::push(log(arg));
 }
 
 
@@ -931,7 +957,8 @@ void Lg::evaluate(AVLTree<ArgData> *tree)
 		Stack::clear();
 		throw invalid_value;
 	}
-	else Stack::push(log10(arg));
+	else 
+		Stack::push(log10(arg));
 }
 
 
@@ -944,7 +971,7 @@ Exp::Exp() : StdFunction(1)
 void Exp::evaluate(AVLTree<ArgData> *tree)
 {
 	Stack::push(exp(Stack::pop()));
-}
+}*/
 
 
 Drobot::Drobot()
@@ -953,7 +980,7 @@ Drobot::Drobot()
 	global_tree.insert(new Multiplication());
 	global_tree.insert(new Division());
 	global_tree.insert(new Substract());
-	global_tree.insert(new Power());
+	/*global_tree.insert(new Power());
 	global_tree.insert(new Sine());
 	global_tree.insert(new Cosine());
 	global_tree.insert(new HyperbolicSine());
@@ -971,16 +998,25 @@ Drobot::Drobot()
 	global_tree.insert(new Lg());
 	global_tree.insert(new Exp());
 	global_tree.insert(new HyperbolicArcsine());
-	global_tree.insert(new HyperbolicArccosine());
+	global_tree.insert(new HyperbolicArccosine());*/
 	string *st = new string("e = 2.71828182845904523536");
 	global_tree.insert(new Const(st));
 	delete st;
 	st = new string("pi = 3.14159265358979323846");
 	global_tree.insert(new Const(st));
 	delete st;
+	st = new string("i");
+	global_tree.insert(new Const(st));
+	delete st;
 }
+bool Drobot::f = false;
 TInternalData* Drobot::drive(string *s)
 {
+	if (!f)
+	{
+		Drobot();
+		f = true;
+	}
 	Stack::clear();
 
 	switch (analisis(*s))
@@ -996,8 +1032,11 @@ TInternalData* Drobot::drive(string *s)
 		return NULL;
 		break;
 	case eval:
-		return new TInternalData(evaluateConstExpr(s));
+	{
+		Interpreter interpreter(s);
+		return new TInternalData(interpreter.evaluateConstExpr());
 		break;
+	}
 	case err:
 		throw(invalid_alloc);
 	}
@@ -1027,5 +1066,241 @@ bool isQ(Quantum *)
 
 bool isQ(ArgData *)
 {
+	return false;
+}
+
+TInternalData SpecMath::pow(TInternalData, TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::sin(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::cos(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::sinh(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::cosh(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::tan(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::tanh(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::asin(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::acos(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::asinh(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::acosh(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::atan(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::atanh(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::log(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::log10(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+TInternalData SpecMath::exp(TInternalData)
+{
+	return TInternalData(0.0);
+}
+
+ostream& operator<<(ostream& out, TInternalData& src)
+{
+	if (src.data_num)
+		out << *(src.data_num);
+	return out;
+}
+
+void ErrStruct::add(void *ptr)
+{
+	vec.push_back(ptr);
+}
+ErrStruct* ErrStruct::code(ErrCode c)
+{
+	_code = c;
+	return this;
+}
+
+bool TInternalData::_isNumber()
+{
+	if (data_num && !data_mat)
+		return true;
+	return false;
+}
+bool TInternalData::_isMatrix()
+{
+	if (!data_num && data_mat)
+		return true;
+	return false;
+}
+TInternalData::TInternalData(DataNS::Data::DataWrap* tmp)
+{
+	data_num = tmp;
+}
+void TInternalData::deleteContent()
+{
+	if (_isNumber())
+		delete data_num;
+	if (_isMatrix())
+		delete data_mat;
+}
+TInternalData::TInternalData(InsideType re, InsideType im)
+{
+	if (isEqu(im, 0))
+		data_num = new DataNS::Data::DataWrap(new DataNS::RealData(re));
+	else
+		data_num = new DataNS::Data::DataWrap(new DataNS::ComplexData(re, im));
+}
+TInternalData::TInternalData(MatrixNS::Matrix * ptr) : data_mat(ptr) { }
+TInternalData::TInternalData(TInternalData & arg)
+{
+	this->data_mat = arg.data_mat;
+	this->data_num = arg.data_num;
+	must_not_delete = true;
+}
+TInternalData & TInternalData::notToDeleteContent()
+{
+	this->must_not_delete = true;
+	return *this;
+}
+TInternalData & TInternalData::mustDeleteContent()
+{
+	this->must_not_delete = false;
+	return *this;
+}
+DataNS::Data::DataWrap * TInternalData::getData()
+{
+	if (_isNumber())
+		return data_num->clone();
+	if (data_mat)
+		return nullptr;
+}
+TInternalData::~TInternalData()
+{
+	if (!must_not_delete)
+	{
+		if (data_mat)
+			delete data_mat;
+		if (_isNumber())
+			delete data_num;
+	}
+}
+TInternalData TInternalData::clone()
+{
+	if (_isNumber())
+	{
+		TInternalData tmp(this->data_num->clone());
+		return tmp.notToDeleteContent();     //Не уверен пока
+	}
+}
+bool TInternalData::isZero()
+{
+	if (_isNumber())
+		return data_num->isZero();
+	/*if (data_mat)
+	return data_mat->isZero();*/
+}
+void TInternalData::setValue(InsideType re, InsideType im)
+{
+	if (!_isNumber())
+		throw you_are_fool;
+	if (data_num)
+		delete data_num;
+	if (isEqu(im, 0))
+		data_num = new DataNS::Data::DataWrap(new DataNS::RealData(re));
+	else
+		data_num = new DataNS::Data::DataWrap(new DataNS::ComplexData(re, im));
+}
+TInternalData & TInternalData::operator += (TInternalData & op)
+{
+	if (_isNumber())
+	{
+		(*data_num) += (*op.data_num);
+		op.mustDeleteContent();
+		return *this;
+	}
+}
+TInternalData & TInternalData::operator -= (TInternalData & op)
+{
+	if (_isNumber())
+	{
+		(*data_num) -= *op.data_num;
+		op.mustDeleteContent();
+		return *this;
+	}
+}
+TInternalData & TInternalData::operator *= (TInternalData & op)
+{
+	if (_isNumber())
+	{
+		(*data_num) *= *op.data_num;
+		op.mustDeleteContent();
+		return *this;
+	}
+}
+TInternalData & TInternalData::operator/=(TInternalData & op)
+{
+	if (_isNumber())
+	{
+		(*data_num) /= *op.data_num;
+		op.mustDeleteContent();
+		return *this;
+	}
+}
+
+EvalNode::EvalNode(Quantum * input) : data(input), next(NULL) {}
+
+bool find(vector < string > *v, string *s)
+{
+	if (!v)
+		return false;
+	for (int i = 0; i < v->size(); ++i)
+		if (((*v)[i]) == (*s))
+			return true;
 	return false;
 }

@@ -3,13 +3,13 @@
 using namespace std;
 
 ///Symbols to skip (unrecognisable)
-const char empty [] = { ' ', '\n', '\t', 8, 10, 13, '\0' };
+const char empty1 [] = { ' ', '\n', '\t', 8, 10, 13, '\0' };
 
 
 bool isEmptySimbol(char c)
 {
-	for (int i = 0; i < strlen(empty); ++i)
-		if (c == empty[i])
+	for (int i = 0; i < strlen(empty1); ++i)
+		if (c == empty1[i])
 			return true;
 	return false;
 }

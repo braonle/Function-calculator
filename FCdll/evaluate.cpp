@@ -1,119 +1,9 @@
 #include "Common.h"
 
-///Maintains memory leaks if exception occurs
-void throw_(ErrCode c, ErrStruct* p)
-{
-	if (p)
-	{
-		p->_code = c;
-		throw p;
-	}
-	throw c;
-}
-
-void getName(string *name, string *s, int *iter)
-{
-	for (; *iter < s->size(); (*iter)++)
-	{
-		char temp = (*s)[*iter];
-		if (isEmptySimbol(temp))
-			return;
-		if (temp == '(' || temp == ')' || temp == ',')
-			return;
-		if (temp == '=' || temp == '$')
-			return;
-		bool f = true;
-		for (int i = 0; i < strlen(ar_operators) && f; ++i)
-			if (temp == ar_operators[i])
-				f = false;
-		if (!f)
-			return;
-		name->push_back(temp);
-	}
-}
-
-bool isConstName(string* s, int *iter)
-{
-	int it = *iter;
-	goToNextSymbol(s, &it);
-	if (!(it < s->size()))
-		return true;
-	if ((*s)[it] != '(')
-		return true;
-	it++;
-	goToNextSymbol(s, &it);
-	if (!(it < s->size()))
-		return false;
-	if ((*s)[it] == ')')
-	{
-		it++;
-		*iter = it;
-		return true;
-	}
-	else
-		return false;
-}
-
-/**Extracts a number from the string
-\param s		- source
-\param value	- pointer to the target location for the number
-\param iter		- current cursor position if the source
-\param p		- service use, deals with memory leaks
-*/
-void getValue(string *s, long double *value, int *iter, ErrStruct* p)
-{
-	float st = 10;
-	*value = 0;
-	long double osn = 1;
-	for (; *iter < s->size(); (*iter)++)
-	{
-		char temp = (*s)[*iter];
-		if (temp == '.')
-		{
-			//If the secong comma occurs, the number is invalid
-			if (st == 0.1)
-				throw_(invalid_value, p);
-			st = 0.1;
-			osn = 1;
-		}
-		else
-		{
-			if (temp <= '9' && temp >= '0')
-				if (st == 10)
-					(*value) = (*value) * st + (temp - '0');
-				else
-					(*value) += (temp - '0') * osn;
-			else
-				return;
-		}
-		osn *= st;
-	}
-}
-
-void goToNextSymbol(string *s, int *iter)
-{
-	for (; *iter < s->size(); ++(*iter))
-		if (!isEmptySimbol((*s)[*iter]))
-			return;
-}
-
-bool isConstMod(string *s, int *iter)
-{
-	goToNextSymbol(s, iter);
-	if (!(*iter < s->size()))
-		return false;
-	if ((*s)[*iter] != '$')
-		return false;
-	(*iter)++;
-	return true;
-}
-
-class HistoryStack;
-
 ///Node of History Stack
-class NodeOfHistoryStack
+class Interpreter::NodeOfHistoryStack
 {
-	NodeOfHistoryStack *prev;
+	Interpreter::NodeOfHistoryStack *prev;
 	string* name;
 	bool const_mod;
 	EvalNode* place;
@@ -122,9 +12,9 @@ public:
 	///For service
 	short number_of_argumets;
 
-	NodeOfHistoryStack(TypeOfQuantum _type, string* _name, EvalNode* _place, bool _const_mod, NodeOfHistoryStack* pointer = NULL) : prev(pointer), type(_type), number_of_argumets(0), name(_name), const_mod(_const_mod), place(_place)
+	NodeOfHistoryStack(TypeOfQuantum _type, string* _name, EvalNode* _place, bool _const_mod, Interpreter::NodeOfHistoryStack* pointer = NULL) : prev(pointer), type(_type), number_of_argumets(0), name(_name), const_mod(_const_mod), place(_place)
 	{
-		
+
 	}
 	~NodeOfHistoryStack()
 	{
@@ -135,26 +25,24 @@ public:
 	friend class HistoryStack;
 };
 
-
 ///History stack, contains types
-class HistoryStack
+class Interpreter::HistoryStack
 {
-	NodeOfHistoryStack* pointer;
-	ErrStruct* p;
+	Interpreter::NodeOfHistoryStack* pointer;
+	Interpreter *int_obj;
 public:
-	vector < string >* pp;
-	
-	HistoryStack(ErrStruct* _p, vector < string >* _pp) : pointer(NULL), p(_p), pp(_pp)
+
+	HistoryStack(Interpreter *obj_) : pointer(NULL), int_obj(obj_)
 	{
-	
+
 	}
 
 	void push(TypeOfQuantum type, string* name = NULL, EvalNode* place = NULL, bool const_mod = false)
 	{
 		if (pointer)
-			pointer = new NodeOfHistoryStack(type, name, place, const_mod, pointer);
+			pointer = new Interpreter::NodeOfHistoryStack(type, name, place, const_mod, pointer);
 		else
-			pointer = new NodeOfHistoryStack(type, name, place, const_mod);
+			pointer = new Interpreter::NodeOfHistoryStack(type, name, place, const_mod);
 	}
 
 	bool isEmpty()
@@ -169,14 +57,14 @@ public:
 	{
 		if (isEmpty())
 			return;
-		NodeOfHistoryStack* tmp = pointer->prev;
+		Interpreter::NodeOfHistoryStack* tmp = pointer->prev;
 		delete pointer;
 		pointer = tmp;
 	}
 
 	void clear()
 	{
-		NodeOfHistoryStack* tmp;
+		Interpreter::NodeOfHistoryStack* tmp;
 		tmp = pointer->prev;
 		delete pointer;
 		if (tmp)
@@ -210,9 +98,9 @@ public:
 	void check()
 	{
 		if (!pointer)
-			throw_(you_are_fool, p);
+			int_obj->throw_(you_are_fool);
 		if (pointer->type != func)
-			throw_(you_are_fool, p);
+			int_obj->throw_(you_are_fool);
 	}
 
 	///Increases the number of arguments by one
@@ -260,28 +148,25 @@ public:
 	}
 };
 
-///Stack of arithmetic operands, used to convert usual expression to polish form
-class PolStack;
-
 ///Node of Poland stack
-class NodeOfPolStack
+class Interpreter::NodeOfPolStack
 {
-	NodeOfPolStack *prev;
+	Interpreter::NodeOfPolStack *prev;
 	Quantum *obj;
 public:
-	NodeOfPolStack(Quantum* _obj, NodeOfPolStack* pointer = NULL) : prev(pointer), obj(_obj)
+	NodeOfPolStack(Quantum* _obj, Interpreter::NodeOfPolStack* pointer = NULL) : prev(pointer), obj(_obj)
 	{
 
 	}
-	friend class PolStack;
-	
+	friend class Interpreter::PolStack;
+
 };
 
-class PolStack
+class Interpreter::PolStack
 {
-	NodeOfPolStack *pointer;
+	Interpreter::NodeOfPolStack *pointer;
 	///Used for dealing with memory leaks
-	ErrStruct* p;
+	Interpreter *int_obj;
 
 	///Pops the most priority operands from stack
 	void del_more_priority(Quantum* obj, EvalList *list)
@@ -296,7 +181,7 @@ class PolStack
 					return;
 	}
 public:
-	PolStack(ErrStruct* _p) : pointer(NULL), p(_p)
+	PolStack(Interpreter *obj_) : pointer(NULL), int_obj(obj_)
 	{
 
 	}
@@ -312,11 +197,11 @@ public:
 			del_more_priority(obj, list);
 			break;
 		}
-		
+
 		if (pointer)
-			pointer = new NodeOfPolStack(obj, pointer);
+			pointer = new Interpreter::NodeOfPolStack(obj, pointer);
 		else
-			pointer = new NodeOfPolStack(obj);
+			pointer = new Interpreter::NodeOfPolStack(obj);
 	}
 
 	///Overriden insert
@@ -328,7 +213,7 @@ public:
 			for (; ;)
 			{
 				if (!pointer)
-					throw_(need_bracket, p);
+					int_obj->throw_(need_bracket);
 				if ((*(pointer->obj->GetName())) == (*(Drobot::ope_br->GetName())))
 					break;
 				list->add(pop());
@@ -340,7 +225,7 @@ public:
 			for (;;)
 			{
 				if (!pointer)
-					throw_(need_bracket, p);
+					int_obj->throw_(need_bracket);
 				if ((*(pointer->obj->GetName())) == (*(Drobot::ope_br->GetName())))
 					break;
 				list->add(pop());
@@ -353,8 +238,8 @@ public:
 	Quantum* pop()
 	{
 		if (!pointer)
-			throw_(invalid_expression, p);
-		NodeOfPolStack* tmp = pointer->prev;
+			int_obj->throw_(invalid_expression);
+		Interpreter::NodeOfPolStack* tmp = pointer->prev;
 		Quantum* temp = pointer->obj;
 		delete pointer;
 		pointer = tmp;
@@ -363,7 +248,7 @@ public:
 
 	void clear()
 	{
-		NodeOfPolStack* tmp;
+		Interpreter::NodeOfPolStack* tmp;
 		tmp = pointer->prev;
 		if (pointer->obj->isUnchengable())
 			delete pointer->obj;
@@ -395,39 +280,149 @@ public:
 	}
 };
 
-bool find(vector < string > * v, string *s)
+Interpreter::Interpreter(string *s_, int *iter_, ErrStruct *p_, vector < string > *v_) : s(s_), iter(iter_), p(p_), v(v_)
 {
-	if (!v)
-		return false;
-	for (int i = 0; i < v->size(); ++i)
-		if (((*v)[i]) == (*s))
-			return true;
-	return false;
-}
 
-bool find(vector < string > * v, Quantum* q)
+}
+void Interpreter::setVector(vector < string >* v_)
+{
+	v = v_;
+}
+///Maintains memory leaks if exception occurs
+void Interpreter::throw_(ErrCode c)
+{
+	if (p)
+	{
+		p->_code = c;
+		throw p;
+	}
+	throw c;
+}
+void Interpreter::getName(string *name)
+{
+	for (; *iter < s->size(); (*iter)++)
+	{
+		char temp = (*s)[*iter];
+		if (isEmptySimbol(temp))
+			return;
+		if (temp == '(' || temp == ')' || temp == ',')
+			return;
+		if (temp == '=' || temp == '$')
+			return;
+		bool f = true;
+		for (int i = 0; i < strlen(ar_operators) && f; ++i)
+			if (temp == ar_operators[i])
+				f = false;
+		if (!f)
+			return;
+		name->push_back(temp);
+	}
+}
+bool Interpreter::isConstName()
+{
+	int it = *iter;
+	goToNextSymbol();
+	if (!(it < s->size()))
+		return true;
+	if ((*s)[it] != '(')
+		return true;
+	it++;
+	goToNextSymbol();
+	if (!(it < s->size()))
+		return false;
+	if ((*s)[it] == ')')
+		{
+			it++;
+			*iter = it;
+			return true;
+		}
+	else
+		return false;
+}
+/**Extracts a number from the string
+	\param s		- source
+	\param value	- pointer to the target location for the number
+	\param iter		- current cursor position if the source
+	\param p		- service use, deals with memory leaks
+	*/
+void Interpreter::getValue(TInternalData *value_)
+{
+	float st = 10;
+	//value->setValue(0);
+	long double ld;
+	long double* value = &ld;
+	*value = 0;
+	long double osn = 1;
+	for (; *iter < s->size(); (*iter)++)
+	{
+		char temp = (*s)[*iter];
+		if (temp == '.')
+		{
+			//If the secong comma occurs, the number is invalid
+			if (st == 0.1)
+				throw_(invalid_value);
+			st = 0.1;
+			osn = 1;
+		}
+		else
+		{
+			if (temp <= '9' && temp >= '0')
+				if (st == 10)
+					(*value) = (*value) * st + (temp - '0');
+				else
+					(*value) = (*value) + (temp - '0') * osn;
+			else
+			{
+				value_->setValue(ld);
+				return;
+			}
+		}
+		osn *= st;
+	}
+	value_->setValue(ld);
+}
+void Interpreter::goToNextSymbol()
+{
+	for (; *iter < s->size(); ++(*iter))
+		if (!isEmptySimbol((*s)[*iter]))
+			return;
+}
+bool Interpreter::isConstMod()
+{
+	goToNextSymbol();
+	if (!(*iter < s->size()))
+		return false;
+	if ((*s)[*iter] != '$')
+		return false;
+	++(*iter);
+	return true;
+}
+bool Interpreter::find(string *s)
+{
+	return ::find(v, s);
+}
+bool Interpreter::find(Quantum* q)
 {
 	TKeyData* s = q->GetName();
 	s->pop_back();
 	s->pop_back();
-	bool f = find(v, s);
+	bool f = find(s);
 	delete s;
 	return f;
 }
-
-void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v, ErrStruct* p)
+void Interpreter::makePolandList(EvalList *list)
 {
 	bool is_function = (v) ? true : false;
 
-	goToNextSymbol(s, iter);
+	goToNextSymbol();
 	if (*iter >= s->size())
-		throw_(invalid_expression, p);
+		throw_(invalid_expression);
 
-	HistoryStack h_stack(p, v);
-	PolStack p_stack(p);
-	for (; (*iter) < s->size(); goToNextSymbol(s, iter))
+	Interpreter::HistoryStack h_stack(this);
+	Interpreter::PolStack p_stack(this);
+	for (; (*iter) < s->size(); goToNextSymbol())
 	{
-		goToNextSymbol(s, iter);
+		goToNextSymbol();
 		if (!(*iter < s->size()))
 			break;
 		switch (h_stack.getLastType())
@@ -447,7 +442,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 					h_stack.push(bin_op);
 					h_stack.incLastNumberOfArgumets();
 					h_stack.push(op_br);
-					(*iter)++;
+					++(*iter);
 					continue;
 				}
 			}
@@ -456,7 +451,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 				h_stack.pop();
 				if (h_stack.getLastType() != op_br)
-					throw_(invalid_expression, p);
+					throw_(invalid_expression);
 
 				h_stack.pop();
 
@@ -465,11 +460,11 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 				case bin_op:
 					h_stack.pop();
 					h_stack.push(val);
-					(*iter)++;
+					++(*iter);
 					continue;
 				case nothing:
 					h_stack.push(val);
-					(*iter)++;
+					++(*iter);
 					continue;
 				case val:
 					throw(you_are_fool, p);
@@ -484,7 +479,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 					{
 						if (num == 1)
 						{
-							if (find(v, h_stack.getName()) && !h_stack.isUnchang())
+							if (find(h_stack.getName()) && !h_stack.isUnchang())
 							{
 								list->add(new Variable(h_stack.getName()), h_stack.getNode());
 								string* pr = new string("*");
@@ -495,7 +490,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 							{
 								tmp = Drobot::global_tree.find(h_stack.getName(), 0);
 								if (!tmp)
-									throw_(unknown_name, p);
+									throw_(unknown_name);
 								if (h_stack.isUnchang())
 									tmp = new Const(dynamic_cast<Const*>(tmp));
 								list->add(tmp, h_stack.getNode());
@@ -505,7 +500,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 							}
 						}
 						else
-							throw_(unknown_name, p);
+							throw_(unknown_name);
 					}
 					else
 					{
@@ -517,12 +512,12 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 					if (h_stack.getLastType() == bin_op)
 						h_stack.pop();
 					h_stack.push(val);
-					(*iter)++;
+					++(*iter);
 					continue;
 				}
 				case op_br:
 					h_stack.push(val);
-					(*iter)++;
+					++(*iter);
 					continue;
 				}
 
@@ -532,26 +527,26 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 				h_stack.pop();
 				if (h_stack.getLastType() != op_br)
-					throw_(invalid_expression, p);
+					throw_(invalid_expression);
 
 				if (!h_stack.isFuncPre())
-					throw_(invalid_expression, p);
+					throw_(invalid_expression);
 
 				h_stack.pop();
 				h_stack.incLastNumberOfArgumets();
 				h_stack.push(op_br);
-				(*iter)++;
+				++(*iter);
 				continue;
 			case '$':
-				throw_(bad_position_of_reserved_symbol, p);
+				throw_(bad_position_of_reserved_symbol);
 				continue;
 			default:
 			{
 				char c = (*s)[*iter];
 				if (c <= '9' && c >= '0')
 				{
-					TInternalData* tmp = new TInternalData(0);
-					getValue(s, tmp, iter, p);
+					TInternalData* tmp = new TInternalData(0.0);
+					getValue(tmp);
 					string* pr = new string("*");
 					p_stack.push(Drobot::global_tree.find(pr), list);
 
@@ -575,7 +570,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 						h_stack.pop();
 						h_stack.push(bin_op);
 						h_stack.incLastNumberOfArgumets();
-						(*iter)++;
+						++(*iter);
 						continue;
 					}
 				}
@@ -583,17 +578,17 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 				if (!found_in_ar_operators)
 				{
 					string* st = new string;
-					getName(st, s, iter);
-					
-					bool uncheng = isConstMod(s, iter);
-					goToNextSymbol(s, iter);
-					
+					getName(st);
+
+					bool uncheng = isConstMod();
+					goToNextSymbol();
+
 					string* pr = new string("*");
 					p_stack.push(Drobot::global_tree.find(pr), list);
 					delete pr;
-					if (!(*iter < s->size()) || isConstName(s, iter))
+					if (!(*iter < s->size()) || isConstName())
 					{
-						if (find(v, st))
+						if (find(st))
 						{
 							if (uncheng)
 							{
@@ -601,7 +596,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 								if (!f)
 								{
 									delete st;
-									throw_(invalid_expression, p);
+									throw_(invalid_expression);
 								}
 								else
 								{
@@ -638,7 +633,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 						p_stack.push(Drobot::ope_br, list);
 						h_stack.push(op_br);
-						(*iter)++;
+						++(*iter);
 					}
 				}
 				continue;
@@ -651,16 +646,16 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 			case '(':
 				p_stack.push(Drobot::ope_br, list);
 				h_stack.push(op_br);
-				(*iter)++;
+				++(*iter);
 				continue;
 			case ')':
-				throw_(invalid_expression, p);
+				throw_(invalid_expression);
 				continue;
 			case ',':
-				throw_(invalid_expression, p);
+				throw_(invalid_expression);
 				continue;
 			case '$':
-				throw_(bad_position_of_reserved_symbol, p);
+				throw_(bad_position_of_reserved_symbol);
 				continue;
 			default:
 			{
@@ -668,8 +663,8 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 				if (c <= '9' && c >= '0')
 				{
-					TInternalData* tmp = new TInternalData(0);
-					getValue(s, tmp, iter, p);
+					TInternalData* tmp = new TInternalData(0.0);
+					getValue(tmp);
 					list->add(new Value(tmp));
 					h_stack.pop();
 					h_stack.push(val);
@@ -678,19 +673,19 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 				for (int i = 0; i < strlen(ar_operators); ++i)
 					if (c == ar_operators[i])
-						throw_(invalid_expression, p);
+						throw_(invalid_expression);
 
 				string* st = new string;
-				getName(st, s, iter);
+				getName(st);
 
-				bool uncheng = isConstMod(s, iter);
-				goToNextSymbol(s, iter);
-				
-				if (!(*iter < s->size()) || isConstName(s, iter))
+				bool uncheng = isConstMod();
+				goToNextSymbol();
+
+				if (!(*iter < s->size()) || isConstName())
 				{
 					h_stack.pop();
 					h_stack.push(val);
-					if (find(v, st))
+					if (find(st))
 					{
 						if (uncheng)
 						{
@@ -698,7 +693,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 							if (!f)
 							{
 								delete st;
-								throw_(invalid_expression, p);
+								throw_(invalid_expression);
 							}
 							else
 							{
@@ -733,7 +728,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 					p_stack.push(Drobot::ope_br, list);
 					h_stack.push(op_br);
-					(*iter)++;
+					++(*iter);
 				}
 			}
 			}
@@ -744,16 +739,16 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 			case '(':
 				p_stack.push(Drobot::ope_br, list);
 				h_stack.push(op_br);
-				(*iter)++;
+				++(*iter);
 				continue;
 			case ')':
-				throw_(invalid_bracket_position, p);
+				throw_(invalid_bracket_position);
 				continue;
 			case ',':
-				throw_(invalid_expression, p);
+				throw_(invalid_expression);
 				continue;
 			case '$':
-				throw_(bad_position_of_reserved_symbol, p);
+				throw_(bad_position_of_reserved_symbol);
 				continue;
 			default:
 			{
@@ -761,8 +756,8 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 				if (c <= '9' && c >= '0')
 				{
-					TInternalData* tmp = new TInternalData(0);
-					getValue(s, tmp, iter, p);
+					TInternalData* tmp = new TInternalData(0.0);
+					getValue(tmp);
 					list->add(new Value(tmp));
 
 					h_stack.push(val);
@@ -772,35 +767,35 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 				if (c == '-')
 				{
 					string* pr = new string("*");
-					long double* ch = new long double(-1);
+					TInternalData* ch = new TInternalData(-1);
 					list->add(new Value(ch));
 					p_stack.push(Drobot::global_tree.find(pr), list);
 					h_stack.push(bin_op);
 					delete pr;
-					(*iter)++;
+					++(*iter);
 					continue;
 				}
 
 				if (c == '+')
 				{
-					(*iter)++;
+					++(*iter);
 					continue;
 				}
 
 				for (int i = 0; i < strlen(ar_operators); ++i)
 					if (c == ar_operators[i])
-						throw_(invalid_expression, p);
+						throw_(invalid_expression);
 
 				string* st = new string;
-				getName(st, s, iter);
+				getName(st);
 
-				bool uncheng = isConstMod(s, iter);
-				goToNextSymbol(s, iter);
+				bool uncheng = isConstMod();
+				goToNextSymbol();
 
-				if (!(*iter < s->size()) || isConstName(s, iter))
+				if (!(*iter < s->size()) || isConstName())
 				{
 					h_stack.push(val);
-					if (find(v, st))
+					if (find(st))
 					{
 						if (uncheng)
 						{
@@ -808,7 +803,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 							if (!f)
 							{
 								delete st;
-								throw_(invalid_expression, p);
+								throw_(invalid_expression);
 							}
 							else
 							{
@@ -843,7 +838,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 					p_stack.push(Drobot::ope_br, list);
 					h_stack.push(op_br);
-					(*iter)++;
+					++(*iter);
 				}
 			}
 			}
@@ -859,13 +854,13 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 			case ')':
 				p_stack.push(')', list);
 				h_stack.pop();
-				(*iter)++;
+				++(*iter);
 				continue;
 			case ',':
-				throw_(invalid_expression, p);
+				throw_(invalid_expression);
 				continue;
 			case '$':
-				throw_(bad_position_of_reserved_symbol, p);
+				throw_(bad_position_of_reserved_symbol);
 				continue;
 			default:
 			{
@@ -873,8 +868,8 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 				if (c <= '9' && c >= '0')
 				{
-					TInternalData* tmp = new TInternalData(0);
-					getValue(s, tmp, iter, p);
+					TInternalData* tmp = new TInternalData(0.0);
+					getValue(tmp);
 					list->add(new Value(tmp));
 
 					h_stack.push(val);
@@ -884,35 +879,35 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 				if (c == '-')
 				{
 					string* pr = new string("*");
-					long double* ch = new long double(-1);
+					TInternalData* ch = new TInternalData(-1);
 					list->add(new Value(ch));
 					p_stack.push(Drobot::global_tree.find(pr), list);
 					h_stack.push(bin_op);
 					delete pr;
-					(*iter)++;
+					++(*iter);
 					continue;
 				}
 
 				if (c == '+')
 				{
-					(*iter)++;
+					++(*iter);
 					continue;
 				}
 
 				for (int i = 0; i < strlen(ar_operators); ++i)
 					if (c == ar_operators[i])
-						throw_(invalid_expression, p);
+						throw_(invalid_expression);
 
 				string* st = new string;
-				getName(st, s, iter);
+				getName(st);
 
-				bool uncheng = isConstMod(s, iter);
-				goToNextSymbol(s, iter);
-				
-				if (!(*iter < s->size()) || isConstName(s, iter))
+				bool uncheng = isConstMod();
+				goToNextSymbol();
+
+				if (!(*iter < s->size()) || isConstName())
 				{
 					h_stack.push(val);
-					if (find(v, st))
+					if (find(st))
 					{
 						if (uncheng)
 						{
@@ -920,7 +915,7 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 							if (!f)
 							{
 								delete st;
-								throw_(invalid_expression, p);
+								throw_(invalid_expression);
 							}
 							else
 							{
@@ -955,44 +950,44 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 
 					p_stack.push(Drobot::ope_br, list);
 					h_stack.push(op_br);
-					(*iter)++;
+					++(*iter);
 				}
 				/*Quantum* f = Drobot::global_tree.find(st);
 				if (!f)
 				{
-					if (!is_function)
-						throw_(unknown_name, p);
-					if (!find(v, st))
-						throw_(unknown_name, p);
-					list->add(new Variable(st));
-					h_stack.push(val);
+				if (!is_function)
+				throw_(unknown_name, p);
+				if (!find(v, st))
+				throw_(unknown_name, p);
+				list->add(new Variable(st));
+				h_stack.push(val);
 
-					delete st;
-					continue;
+				delete st;
+				continue;
 				}
 
 				if (f->GetType() == con)
 				{
-					if (isConstMod(s, iter))
-						list->add(new Const(dynamic_cast<Const*>(f)));
-					else
-						list->add(f);
-					delete st;
-					h_stack.push(val);
-					continue;
+				if (isConstMod(s, iter))
+				list->add(new Const(dynamic_cast<Const*>(f)));
+				else
+				list->add(f);
+				delete st;
+				h_stack.push(val);
+				continue;
 				}
 				bool uncheng = isConstMod(s, iter);
 
 				goToNextSymbol(s, iter);
 				if (!(*iter < s->size()))
-					throw_(wrong_number_of_argument, p);
+				throw_(wrong_number_of_argument, p);
 				if ((*s)[*iter] != '(')
-					throw_(invalid_operand, p);
+				throw_(invalid_operand, p);
 
 				if (uncheng)
-					p_stack.push(new Function(dynamic_cast<Function*>(f)), list);
+				p_stack.push(new Function(dynamic_cast<Function*>(f)), list);
 				else
-					p_stack.push(f, list);
+				p_stack.push(f, list);
 
 				p_stack.push(Drobot::ope_br, list);
 				h_stack.push(func, f);
@@ -1005,34 +1000,36 @@ void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v,
 	}
 
 	if (!h_stack.isCorrect())
-		throw_(invalid_expression, p);
+		throw_(invalid_expression);
 
 	for (; !p_stack.isEmpty();)
 		if (p_stack.isOpenedBr())
-			throw_(invalid_expression, p);
+			throw_(invalid_expression);
 		else
 			list->add(p_stack.pop());
 }
-
-
 /**Calculates the expression
 \param	s	 -	source
 */
-TInternalData evaluateConstExpr(string *s)
+TInternalData Interpreter::evaluateConstExpr()
 {
-	int iter = 0;
+	iter = new int(0);
+	p = new ErrStruct;
+	p->add(iter);
 	EvalList pol_list;
 	if (s->find('=') != -1)
-	for (int i = s->size() - 1; i >= 0; --i)
-		if ((*s)[i] == '=')
-		{
-			s->pop_back();
-			break;
-		}
-		else
-			s->pop_back();
+		for (int i = s->size() - 1; i >= 0; --i)
+			if ((*s)[i] == '=')
+			{
+				s->pop_back();
+				break;
+			}
+			else
+				s->pop_back();
 
-	makePolandList(&pol_list, s, &iter);
+	makePolandList(&pol_list);
+	delete iter;
+	delete p;
 	pol_list.evaluate();
 
 	if (!Stack::isNormalRezult())

@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include "function.h"
+#include "Matrix.h"
 
 #define _USE_MATH_DEFINES
 
@@ -20,13 +21,15 @@ typedef string TKeyData;
 ///Default arithmetic operators which are recognised
 const char ar_operators [] = { '+', '-', '*', '/', '^', '\0' };
 
+bool isEqu(const long double &arg1, const long double &arg2);
+
 ///Recognisable Quantum types - Function, Value, Const, Variable, OpenBracket, StdFunction, BinaryOp, NULL
 enum TypeOfQuantum { func, val, con, var, op_br, std_func, bin_op, nothing };
 
 ///Error codes given through exceptions
 enum ErrCode 
 {
-	invalid_name, invalid_expression, division_by_zero, invalid_operand, invalid_value, \
+	invalid_name, invalid_expression, division_by_zero, invalid_operand, invalid_value,
 	memory_error, need_bracket, unknown_name, you_are_fool, wrong_number_of_argument,
 	bad_power, invalid_bracket_position, invalid_alloc, bad_re, bad_position_of_reserved_symbol
 };
@@ -36,17 +39,74 @@ class Quantum;
 ///Used for exceptions, extention to ErrCode, maintains correct deleting of function names (pointer)
 struct ErrStruct
 {
-	string* pointer;
+	vector <void * > vec;
 	ErrCode _code;
-	ErrStruct* code(ErrCode c)
-	{
-		_code = c;
-		return this;
-	}
+	void add(void *ptr);
+	ErrStruct* code(ErrCode c);
 };
 
 /// Type of main data used for calculations
-typedef long double TInternalData;
+class TInternalData
+{
+	DataNS::Data::DataWrap* data_num = nullptr;
+	MatrixNS::Matrix* data_mat = nullptr;
+	bool must_not_delete = false;
+
+	bool _isNumber();
+	bool _isMatrix();
+	TInternalData(DataNS::Data::DataWrap* tmp);
+	void deleteContent();
+public:
+	TInternalData(InsideType re, InsideType im = 0);
+	TInternalData(MatrixNS::Matrix* ptr);
+	TInternalData(TInternalData& arg);
+	TInternalData& notToDeleteContent();
+	/**
+		It is nessesary to use it when the object is returned from a function.
+	*/
+	TInternalData& mustDeleteContent();
+	DataNS::Data::DataWrap* getData();
+	~TInternalData();
+	TInternalData clone();
+	bool isZero();
+	void setValue(InsideType re, InsideType im = 0);
+	//You should not use theese operators till you don't realise the meaning of the flag "must_not_delete".
+	TInternalData& operator += (TInternalData& op);
+	TInternalData& operator -= (TInternalData& op);
+	TInternalData& operator *= (TInternalData& op);
+	TInternalData& operator /= (TInternalData& op);
+	/*TInternalData& operator = (TInternalData& tmp)
+	{
+		if (!must_not_delete)
+			deleteContent();
+		tmp.notToDeleteContent();
+		this->mustDeleteContent();
+		this->data_mat = tmp.data_mat;
+		this->data_num = tmp.data_num;
+		return *this;
+	}*/
+	friend ostream& operator<<(ostream& out, TInternalData& src);
+};
+
+namespace SpecMath
+{
+	TInternalData pow(TInternalData, TInternalData);
+	TInternalData sin(TInternalData);
+	TInternalData cos(TInternalData);
+	TInternalData sinh(TInternalData);
+	TInternalData cosh(TInternalData);
+	TInternalData tan(TInternalData);
+	TInternalData tanh(TInternalData);
+	TInternalData asin(TInternalData);
+	TInternalData acos(TInternalData);
+	TInternalData asinh(TInternalData);
+	TInternalData acosh(TInternalData);
+	TInternalData atan(TInternalData);
+	TInternalData atanh(TInternalData);
+	TInternalData log(TInternalData);
+	TInternalData log10(TInternalData);
+	TInternalData exp(TInternalData);
+}
 
 ///Used for tree of arguments (created when Function is called)
 struct ArgData
@@ -76,7 +136,7 @@ public:
 	///Returns arithmetic priority of operation
 	virtual char getPriority();								
 	virtual TKeyData* GetName();
-	virtual ~Quantum(){};
+	virtual ~Quantum();
 };
 
 /// Contains a constant value of a function
@@ -123,7 +183,7 @@ struct EvalNode
 	EvalNode *next;
 	/** Pointer to the actual member of the list: Value, Variable, Function*/
 	Quantum *data;
-	EvalNode(Quantum* input) : data(input), next(NULL) {};
+	EvalNode(Quantum* input);
 };
 
 /// Storage of expression as a List
@@ -187,7 +247,9 @@ struct StNode
 {
 	StNode *prev;
 	TInternalData data;
-	StNode(TInternalData, StNode *p = NULL);
+	StNode(TInternalData&, StNode *p = NULL);
+	void notToDeletePTR();
+	~StNode();
 };
 
 ///Used for calculations
@@ -195,7 +257,7 @@ class Stack
 {
 	static StNode *pointer;
 public:
-	static void push(TInternalData );
+	static void push(TInternalData&);
 	static TInternalData pop();
 	static bool isEmpty();
 	static void clear();
@@ -256,7 +318,6 @@ public:
 ///For service use
 class OpenedBracket : public Quantum
 {
-	//const char priority = 0;
 	TKeyData *key;
 public:
 	OpenedBracket();
@@ -264,63 +325,52 @@ public:
 	virtual char getPriority();
 	virtual void evaluate(AVLTree < ArgData > *tree = NULL);
 	virtual TKeyData* GetName();
-	//virtual bool isOpenedBreacket();
 	~OpenedBracket();
 };
 
 class Plus : public BinaryOp
 {
 public:
-	//const char priority = 1;
 	Plus();
 	virtual void evaluate(AVLTree < ArgData > *tree);
 	virtual char getPriority();
 	virtual TKeyData* GetName();
-	//virtual bool isOpenedBreacket();
 };
 
 class Substract : public BinaryOp
 {
 public:
-	//const char priority = 1;
 	Substract();
 	virtual void evaluate(AVLTree < ArgData > *tree);
 	virtual char getPriority();
 	virtual TKeyData* GetName();
-	//virtual bool isOpenedBreacket();
 };
 
 class Multiplication : public BinaryOp
 {
-	//const char priority = 2;
 public:
 	Multiplication();
 	virtual void evaluate(AVLTree < ArgData > *tree);
 	virtual char getPriority();
 	virtual TKeyData* GetName();
-	//virtual bool isOpenedBreacket();
 };
 
 class Division : public BinaryOp
 {
-	//const char priority = 2;
 public:
 	Division();
 	virtual void evaluate(AVLTree < ArgData > *tree);
 	virtual char getPriority();
 	virtual TKeyData* GetName();
-	//virtual bool isOpenedBreacket();
 };
 
 class Power : public BinaryOp
 {
-	//const char priority = 3;
 public:
 	Power();
 	virtual void evaluate(AVLTree < ArgData > *tree);
 	virtual char getPriority();
 	virtual TKeyData* GetName();
-	//virtual bool isOpenedBreacket();
 };
 
 class Sine : public StdFunction
@@ -473,42 +523,64 @@ public:
 \param	s		-	source 
 \param	iter	-	current cursor position in the source
 */
-void getName(string *name, string *s, int *iter);
+//void getName(string *name, string *s, int *iter);
 ///Go to the next treated symbol (not from empty[])
-void goToNextSymbol(string *s, int *iter);
-/**Convert string into the polish form
-\param	list	- pointer to the target list
-\param	s		- source
-\param	v		- if Function - pointer to the vector of arguments
-\param	p		- used to deal with memory leaks
-*/
-void makePolandList(EvalList *list, string *s, int *iter, vector < string > * v = NULL, ErrStruct* p = NULL);
-TInternalData evaluateConstExpr(string *s);
+//void goToNextSymbol(string *s, int *iter);
 
 ///For service use
 void kostyl(Quantum *);
 ///Exchanges function if EvalList
-void change(Quantum* tmp1, Quantum* tmp2);
+void change(Quantum*, Quantum*);
 ///Does nothing (only override)
-void change(ArgData* tmp1, ArgData* tmp2);
+void change(ArgData*, ArgData*);
 ///Searches for an argument
-bool find(vector < string > * v, string *s);
+bool find(vector < string > *, string*);
 
 ///Calculating class
 class Drobot
 {
 	static vector < string > input_history;
+	Drobot();
+	static bool f;
 public:
 	static AVLTree < Quantum > global_tree;
 	static Quantum* ope_br;
-	Drobot();
+	
 	/**Calculates the algebraic expression
 	\param	s	-	pointer to expression (do not delete it manually!)
 	\return	calculated result
 	*/
-	TInternalData* drive(string *s);
+	static TInternalData* drive(string *);
 	vector < string >* getHistory();
 	~Drobot();
+};
+
+class Interpreter
+{
+	string *s;
+	int *iter;
+	ErrStruct *p;
+	vector < string > *v;
+public:
+	Interpreter(string*, int *iter_ = nullptr, ErrStruct *p_ = nullptr, vector < string > *v_ = nullptr);
+	void setVector(vector < string > *);
+	void throw_(ErrCode);
+	void getName(string*);
+	bool isConstName();
+	void getValue(TInternalData*);
+	void goToNextSymbol();
+	bool isConstMod();
+
+	class HistoryStack;
+	class NodeOfHistoryStack;
+	///Stack of arithmetic operands, used to convert usual expression to polish form
+	class PolStack;
+	class NodeOfPolStack;
+
+	bool find(string*);
+	bool find(Quantum*);
+	void makePolandList(EvalList*);
+	TInternalData evaluateConstExpr();
 };
 
 ///Returns true
