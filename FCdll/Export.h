@@ -1,16 +1,18 @@
 #pragma once
 #include <string>
+#include "Common.h"
+#include "Matrix.h"
 
-typedef struct
+typedef struct TData
 {
-	long double value;
+	TInternalData* value;
 	int result;
-}TData, *PData;
+}*PData;
 
 #ifdef __DLL__
 
-extern "C" TData __declspec(dllexport) __stdcall maintain(char* s);
-extern "C" void __declspec(dllexport) __stdcall freeDllPointer(void *pointer);
+TData __declspec(dllexport) __stdcall maintain(char* s);
+void __declspec(dllexport) __stdcall freeDllPointer(void *pointer);
 
 #else
 
@@ -22,7 +24,7 @@ enum ErrCode
 	bad_power, invalid_bracket_position, invalid_alloc, bad_re
 };
 
-extern "C" TData __declspec(dllimport) __stdcall maintain(char* s);
-extern "C" void __declspec(dllimport) __stdcall freeDllPointer(void *pointer);
+TData __declspec(dllimport) __stdcall maintain(char* s);
+void __declspec(dllimport) __stdcall freeDllPointer(void *pointer);
 
 #endif

@@ -3,10 +3,8 @@
 #include "Export.h"
 #include "Common.h"
 
-extern "C" TData __declspec(dllexport) __stdcall maintain(char* s)
-{
-	static Drobot calc;
-	
+TData __declspec(dllexport) __stdcall maintain(char* s)
+{	
 	std::string *tmp = new std::string;
 	
 	int i = 0;
@@ -17,8 +15,8 @@ extern "C" TData __declspec(dllexport) __stdcall maintain(char* s)
 	
 	try
 	{
-		TInternalData *p = calc.drive(tmp);
-		if (p)	ret.value = *p;
+		TInternalData *p = Drobot::drive(tmp);
+		if (p)	ret.value = p;
 		else	ret.result = -2;
 
 	}
@@ -37,7 +35,7 @@ extern "C" TData __declspec(dllexport) __stdcall maintain(char* s)
 	return ret;
 }
 
-extern "C" void __declspec(dllexport) __stdcall freeDllPointer(void *pointer)
+void __declspec(dllexport) __stdcall freeDllPointer(void *pointer)
 {
 	if (pointer) delete pointer;
 }

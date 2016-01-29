@@ -518,6 +518,4 @@ namespace MatrixNS
 	};
 
 	ostream& operator<< (ostream& ss, Matrix& m);
-	
-	string*** separ(vector < string *>, int width, int length);
 }

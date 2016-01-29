@@ -1,7 +1,6 @@
 #include "Matrix.h"
 #include <sstream>
 #include <cmath>
-//#include "Common.h"
 
 using namespace MatrixNS;
 using namespace DataNS;
@@ -26,12 +25,6 @@ bool Data::_eq(InsideType num, InsideType data)
 		return false;
 }
 
-/*Data::DataWrap DataNS::parse(string* source)
-{
-	Data::DataWrap wr((Drobot::drive(source))->getData());
-	delete source;
-	return wr;	
-}*/
 DataCodes Data::_getCode(Data* code)
 {
 	if (NULL == code)
@@ -1158,34 +1151,3 @@ long long MatrixNS::timetest(Matrix& A, Matrix& B)
 	return init0 - init1;
 }
 */
-
-/*DataNS::Data*** MatrixNS::Matrix::parse(string*** str, int width, int length)
-{
-	DataNS::Data*** mas = new DataNS::Data**[width];
-	for (int i = 0; i < width; ++i)
-	{
-		mas[i] = new DataNS::Data*[length];
-		for (int j = 0; j < length; ++j)
-		{
-			try
-			{
-				mas[i][j] = DataNS::parse(str[i][j]);
-			}
-			catch (...)
-			{
-				//ћожем потер€ть прокидываемый указатель
-				for (int k = 0; k < i; ++k)
-				{
-					for (int l = 0; l < length; ++l)
-						delete mas[k][l];
-					delete mas[k];
-				}
-				for (int l = 0; l < j; ++l)
-					delete mas[i][l];
-				delete mas;
-				throw bad_num_format;
-			}
-		}
-	}
-	return mas;
-}*/
