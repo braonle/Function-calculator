@@ -1,6 +1,9 @@
 #include "Matrix.h"
 #include <sstream>
-#include <cmath>
+#define _USE_MATH_DEFINES
+#include <math.h>
+
+
 
 using namespace MatrixNS;
 using namespace DataNS;
@@ -24,6 +27,7 @@ bool Data::_eq(InsideType num, InsideType data)
 	else
 		return false;
 }
+
 
 DataCodes Data::_getCode(Data* code)
 {
@@ -210,7 +214,6 @@ Data::DataWrap& Data::DataWrap::operator += (Data::DataWrap &param) throw(ErrCod
 	if (arg2 != param._ptr)
 		delete arg2;
 	param._tmpFlag = false;
-	this->_tmpFlag = false;
 	return *this;
 }
 Data::DataWrap& Data::DataWrap::operator -= (Data::DataWrap &deduction) throw(ErrCodes)
@@ -232,7 +235,6 @@ Data::DataWrap& Data::DataWrap::operator -= (Data::DataWrap &deduction) throw(Er
 	if (arg2 != deduction._ptr)
 		delete arg2;
 	deduction._tmpFlag = false;
-	this->_tmpFlag = false;
 	return *this;
 }
 Data::DataWrap& Data::DataWrap::operator *= (Data::DataWrap &param) throw(ErrCodes)
@@ -254,7 +256,6 @@ Data::DataWrap& Data::DataWrap::operator *= (Data::DataWrap &param) throw(ErrCod
 	if (arg2 != param._ptr)
 		delete arg2;
 	param._tmpFlag = false;
-	this->_tmpFlag = false;
 	return *this;
 }
 Data::DataWrap& Data::DataWrap::operator /= (Data::DataWrap& divisor) throw(ErrCodes)
@@ -276,7 +277,6 @@ Data::DataWrap& Data::DataWrap::operator /= (Data::DataWrap& divisor) throw(ErrC
 	if (arg2 != divisor._ptr)
 		delete arg2;
 	divisor._tmpFlag = false;
-	this->_tmpFlag = false;
 	return *this;
 }
 Data::DataWrap& Data::DataWrap::operator = (Data::DataWrap& src) throw(ErrCodes)
@@ -344,27 +344,51 @@ InsideType DataNS::Data::DataWrap::abs()
 }
 Data::DataWrap DataNS::Data::DataWrap::cos()
 {
-	return Data::DataWrap(this->_ptr->cos());
+	return Data::DataWrap(this->_ptr->cos()).restrictDelete();
 }
 Data::DataWrap DataNS::Data::DataWrap::sin()
 {
-	return Data::DataWrap(this->_ptr->sin());
+	return Data::DataWrap(this->_ptr->sin()).restrictDelete();
 }
 Data::DataWrap DataNS::Data::DataWrap::exp()
 {
-	return Data::DataWrap(this->_ptr->exp());
+	return Data::DataWrap(this->_ptr->exp()).restrictDelete();
 }
 Data::DataWrap DataNS::Data::DataWrap::sqr()
 {
-	return Data::DataWrap(this->_ptr->sqr());
+	return Data::DataWrap(this->_ptr->sqr()).restrictDelete();
 }
 Data::DataWrap DataNS::Data::DataWrap::sqrt()
 {
-	return Data::DataWrap(this->_ptr->sqrt());
+	return Data::DataWrap(this->_ptr->sqrt()).restrictDelete();
 }
 Data::DataWrap DataNS::Data::DataWrap::tan()
 {
-	return Data::DataWrap(this->_ptr->tan());
+	return Data::DataWrap(this->_ptr->tan()).restrictDelete();
+}
+Data::DataWrap DataNS::Data::DataWrap::sinh()
+{
+	return Data::DataWrap(this->_ptr->sinh()).restrictDelete();
+}
+Data::DataWrap DataNS::Data::DataWrap::cosh()
+{
+	return Data::DataWrap(this->_ptr->cosh()).restrictDelete();
+}
+Data::DataWrap DataNS::Data::DataWrap::tanh()
+{
+	return Data::DataWrap(this->_ptr->tanh()).restrictDelete();
+}
+Data::DataWrap DataNS::Data::DataWrap::log()
+{
+	return Data::DataWrap(this->_ptr->log()).restrictDelete();
+}
+Data::DataWrap DataNS::Data::DataWrap::pow(Data::DataWrap& param)
+{
+	return (this->log() * param).exp().restrictDelete();
+}
+Data* DataNS::Data::DataWrap::getContent()
+{
+	return _ptr;
 }
 ostream& DataNS::operator << (ostream& out, Data::DataWrap& src)
 {
@@ -429,11 +453,45 @@ Data * DataNS::RealData::sqr()
 }
 Data * DataNS::RealData::sqrt()
 {
-	return new DataNS::RealData(std::sqrt(this->_data));
+	if (_data >= 0)
+	{
+		return new DataNS::RealData(std::sqrt(this->_data));
+	}
+	else
+	{
+		return new DataNS::ComplexData(0, std::sqrt(_data));
+	}
 }
 Data * DataNS::RealData::exp()
 {
 	return new DataNS::RealData(std::exp(this->_data));
+}
+Data * DataNS::RealData::sinh()
+{
+	return new DataNS::RealData((std::exp(_data) - std::exp(_data)) / 2);
+}
+Data * DataNS::RealData::cosh()
+{
+	return new DataNS::RealData((std::exp(_data) + std::exp(_data)) / 2);
+}
+Data * DataNS::RealData::tanh()
+{
+	return new DataNS::RealData((std::exp(_data) + std::exp(_data)) / (std::exp(_data) - std::exp(_data)));
+}
+Data * DataNS::RealData::log()
+{
+	if (_eq(_data, 0))
+	{
+		throw zero_pow;
+	}
+	else if (_data > 0)
+	{
+		return new RealData(std::log(_data));
+	}
+	else
+	{
+		return new ComplexData(std::log(std::abs(_data)), M_PI);
+	}
 }
 void RealData::output(ostream& ss)
 {
@@ -523,27 +581,94 @@ ErrCodes ComplexData::divide(Data * dt)
 }
 Data * DataNS::ComplexData::sin()
 {
-	return nullptr;
+	return new DataNS::ComplexData(std::sin(_re) * std::cosh(_im), std::sinh(_im) * std::cos(_re));
 }
 Data * DataNS::ComplexData::cos()
 {
-	return nullptr;
+	return new DataNS::ComplexData(std::cos(_re) * std::cosh(_im), (-1) * std::sinh(_im) * std::sin(_re));;
 }
 Data * DataNS::ComplexData::tan()
 {
-	return nullptr;
+	Data * ptr = this->cos();
+	Data * ret = this->sin();
+	ErrCodes err = ret->divide(ptr);
+	delete ptr;
+	if (err != correct)
+	{
+		delete ptr;
+		throw err;
+	}
+	return ret;
 }
 Data * DataNS::ComplexData::sqr()
 {
-	return nullptr;
+	return new DataNS::ComplexData(_re * _re - _im * _im, 2 * _re * _im);
 }
 Data * DataNS::ComplexData::sqrt()
 {
-	return nullptr;
+	InsideType module = std::sqrt(std::sqrt(_re * _re + _im * _im));
+	if (!Data::_eq(_re, 0))
+	{
+		InsideType angle = std::atan(_im / _re) * 0.5;
+		return new DataNS::ComplexData(module * std::cos(angle), module * std::sin(angle));
+	}
+	else if (_im > 0)
+	{
+		return new DataNS::ComplexData(module * std::sqrt(2) / 2, module * std::sqrt(2) / 2);
+	}
+	else
+	{
+		return new DataNS::ComplexData((-1) * module * std::sqrt(2) / 2, module * std::sqrt(2) / 2);
+	}
 }
 Data * DataNS::ComplexData::exp()
 {
-	return nullptr;
+	InsideType module = std::exp(_im);
+	return new DataNS::ComplexData(module * std::cos(_re), module * std::sin(_re));
+}
+Data * DataNS::ComplexData::cosh()
+{
+	return new DataNS::ComplexData(std::cos(_im) * std::cosh(_re), std::sin(_im) * std::sinh(_re));
+}
+Data * DataNS::ComplexData::sinh()
+{
+	return new DataNS::ComplexData(std::cos(_im) * std::sinh(_re), std::sin(_im) * std::cosh(_re));
+}
+Data * DataNS::ComplexData::tanh()
+{
+	Data * ptr = this->cosh();
+	Data * ret = this->sinh();
+	ErrCodes err = ret->divide(ptr);
+	delete ptr;
+	if (err != correct)
+	{
+		delete ptr;
+		throw err;
+	}
+	return ret;
+}
+Data * DataNS::ComplexData::log()
+{
+	if (_eq(_re, 0) && _eq(_im, 0))
+	{
+		throw zero_pow;
+	}
+	else if (_eq(_im, 0))
+	{
+		return new RealData(_re);
+	}
+	else if (!_eq(_re, 0))
+	{
+		return new ComplexData(0.5 * std::log(_re*_re + _im*_im), std::atan(_im / _re));
+	}
+	else if (_im > 0)
+	{
+		return new ComplexData(std::log(_im), M_PI_2);
+	}
+	else
+	{
+		return new ComplexData(std::log(std::abs(_im)), 3 * M_PI_2);
+	}
 }
 Data* ComplexData::conjugate()
 {

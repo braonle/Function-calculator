@@ -22,10 +22,14 @@ using namespace std;
 	doubleTmpUsage - thrown by DataWrap operators if a temporary unit is used twice
 	mBad		-	thrown by Matrix methods if a matrix is not a square one
 	mZero		-	thrown by Matrix methods if a matrix has a zero determinant
+	zero_pow	-	returned by log() if Data equals 0
+	not_supported - for calculations which are not supported yet but are taken into account for development
 */
 enum ErrCodes
 {
-	correct, bad_ptr, zero_div, no_mem, no_type_impl, unknown_type, bad_num_format, mMismatch, mEmpty, doubleTmpUsage, mBad, mZero
+	correct, bad_ptr, zero_div, no_mem, no_type_impl, unknown_type,
+	bad_num_format, mMismatch, mEmpty, doubleTmpUsage, mBad, mZero, zero_pow,
+	not_supported
 };
 
 typedef long double InsideType;
@@ -46,6 +50,7 @@ namespace DataNS
 	class Data
 	{
 	public:
+		class DataWrap;
 		/** 
 			Adds an object of the same type to the current one. Should not be used directly
 			\param	dt	-	pointer to an object of the same type; otherwise a ErrCodes::bad_ptr would be returned 
@@ -73,22 +78,20 @@ namespace DataNS
 		virtual InsideType abs(void) = 0;
 		virtual Data* sin() = 0;
 		virtual Data* cos() = 0;
-		//virtual Data* sinh() = 0;
-		//virtual Data* cosh() = 0;
+		virtual Data* sinh() = 0;
+		virtual Data* cosh() = 0;
 		virtual Data* tan() = 0;
-		//virtual Data* tanh() = 0;
+		virtual Data* tanh() = 0;
 		//virtual Data* asin() = 0;
 		//virtual Data* acos() = 0;
 		//virtual Data* asinh() = 0;
 		//virtual Data* acosh() = 0;
 		//virtual Data* atan() = 0;
 		//virtual Data* atanh() = 0;
-		//virtual Data* log() = 0;
-		//virtual Data* log10() = 0;
+		virtual Data* log() = 0;
 		virtual Data* sqr() = 0;
 		virtual Data* sqrt() = 0;
 		virtual Data* exp() = 0;
-		//virtual Data* pow(Data*) = 0;
 		/**
 			Used to write the contents of this object to the specified output stream.
 			\param	ss	-	output stream, where data are to be written
@@ -117,7 +120,6 @@ namespace DataNS
 		/**
 			Class that handles Data calculations and offers more flexibility. Designed for the direct usage.
 		*/
-		class DataWrap;
 	private:
 		//Implements type conversion for Data inheritants. Should be extended if new types and added.
 		static void _argConvert(Data** arg1, Data** arg2) throw (ErrCodes);
@@ -270,17 +272,34 @@ namespace DataNS
 			\return		temporary instance of DataWrap with defined contents
 		*/
 		static Data::DataWrap getInstance(Data* src);
+		Data* getContent();
+
+
 		InsideType abs();
+
+		//Needs to be tested if right mathematical results are returned, especially using
+		//ComplexData inner object
 		Data::DataWrap cos();
 		Data::DataWrap sin();
 		Data::DataWrap exp();
 		Data::DataWrap sqr();
 		Data::DataWrap sqrt();
 		Data::DataWrap tan();
+		Data::DataWrap sinh();
+		Data::DataWrap cosh();
+		Data::DataWrap tanh();
+		///Gives the main branch of logarithm
+		Data::DataWrap log();
+		Data::DataWrap pow(Data::DataWrap&);
+		//Data::DataWrap asin();
+		//Data::DataWrap acos();
+		//Data::DataWrap asinh();
+		//Data::DataWrap acosh();
+		//Data::DataWrap atan();
+		//Data::DataWrap atanh();
 		~DataWrap();
 	};
 
-	Data::DataWrap parse(string* src);	
 	ostream& operator<<(ostream& out, Data::DataWrap& src);
 		
 	class RealData : public Data
@@ -294,22 +313,20 @@ namespace DataNS
 		virtual ErrCodes divide(Data *dt);
 		virtual Data* sin();
 		virtual Data* cos();
-		//virtual Data* sinh();
-		//virtual Data* cosh();
-		virtual Data* tan();
-		//virtual Data* tanh();
+		virtual Data* sinh();
+		virtual Data* cosh();
+		virtual Data* tan() throw(ErrCodes);
+		virtual Data* tanh();
 		//virtual Data* asin();
 		//virtual Data* acos();
 		//virtual Data* asinh();
 		//virtual Data* acosh();
 		//virtual Data* atan();
 		//virtual Data* atanh();
-		//virtual Data* log();
-		//virtual Data* log10();
+		virtual Data* log();
 		virtual Data* sqr();
 		virtual Data* sqrt();
 		virtual Data* exp();
-		//virtual Data* pow(Data*);
 		virtual void output(ostream& ss);
 		virtual Data* conjugate();
 		virtual InsideType abs(void);
@@ -331,22 +348,20 @@ namespace DataNS
 		virtual ErrCodes divide(Data *dt);
 		virtual Data* sin();
 		virtual Data* cos();
-		//virtual Data* sinh();
-		//virtual Data* cosh();
+		virtual Data* sinh();
+		virtual Data* cosh();
 		virtual Data* tan();
-		//virtual Data* tanh();
+		virtual Data* tanh();
 		//virtual Data* asin();
 		//virtual Data* acos();
 		//virtual Data* asinh();
 		//virtual Data* acosh();
 		//virtual Data* atan();
 		//virtual Data* atanh();
-		//virtual Data* log();
-		//virtual Data* log10();
+		virtual Data* log();
 		virtual Data* sqr();
 		virtual Data* sqrt();
 		virtual Data* exp();
-		//virtual Data* pow(Data*);
 		virtual Data* conjugate();
 		virtual void output(ostream& ss);
 		virtual InsideType abs(void);
